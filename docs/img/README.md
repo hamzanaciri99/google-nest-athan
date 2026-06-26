@@ -11,12 +11,7 @@ GitHub will render them automatically once committed.
 | `03-apps-script-authorize.png` | The Google permissions/authorization popup when first running the script |
 | `04-apps-script-trigger.png` | The Triggers page showing the daily `dailySync` trigger |
 | `05-calendar-events-result.png` | Google Calendar showing the generated Fajr/Dhuhr/Asr/Maghrib/Isha events |
-| `06-gcloud-oauth-client.png` | Google Cloud Console screen after creating the OAuth client ID |
-| `07-ha-google-calendar-integration.png` | Home Assistant "Add Integration" flow for Google Calendar, with your calendar selected |
-| `08-ha-entities-nest-speaker.png` | Home Assistant Entities list, showing your Nest speaker's entity ID |
-| `09-ha-automations-yaml.png` | The automation pasted into Home Assistant's YAML editor |
-| `10-ha-input-boolean.png` | The `athan_enabled` helper visible under Settings > Devices & Services > Helpers |
-| `11-ha-automation-trace-success.png` | A successful automation trace/logbook entry after a prayer event fired |
+| `06-athan-player-logs.png` | Terminal/`journalctl` output showing `athan_player.py` loading the day's schedule |
 
 No screenshots are committed yet - this folder just reserves the filenames the
 README expects.

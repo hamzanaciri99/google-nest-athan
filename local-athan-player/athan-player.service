@@ -1,0 +1,28 @@
+# systemd unit so the player survives reboots and restarts on crash.
+#
+# Install:
+#   sudo cp athan-player.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now athan-player
+#
+# Check status / logs:
+#   systemctl status athan-player
+#   journalctl -u athan-player -f
+#
+# Edit WorkingDirectory, ExecStart, and User below to match your setup.
+
+[Unit]
+Description=Athan prayer-time player (casts Adhan to Google Nest speaker)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/pi/prayer-times/local-athan-player
+ExecStart=/usr/bin/python3 /home/pi/prayer-times/local-athan-player/athan_player.py
+Restart=on-failure
+RestartSec=15
+User=pi
+
+[Install]
+WantedBy=multi-user.target

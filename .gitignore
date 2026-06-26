@@ -2,3 +2,6 @@
 *.log
 .DS_Store
 Thumbs.db
+local-athan-player/config.py
+local-athan-player/__pycache__/
+local-athan-player/venv/
