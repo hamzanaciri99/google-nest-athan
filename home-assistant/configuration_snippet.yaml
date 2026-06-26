@@ -1,0 +1,12 @@
+# Add this to your Home Assistant configuration.yaml (or split it into
+# packages/ if you use packages). This defines an on/off helper so you
+# can mute the Athan without disabling the whole automation - e.g. while
+# you have guests, or during quiet hours.
+#
+# After adding this, restart Home Assistant (or reload "Input Booleans"
+# from Settings > System > Reload, if available).
+
+input_boolean:
+  athan_enabled:
+    name: Athan Enabled
+    icon: mdi:bell-ring
