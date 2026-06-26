@@ -17,7 +17,10 @@ network (e.g. a Raspberry Pi, NAS, or always-on PC). Each day it fetches
 that day's prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha) from the
 [Aladhan API](https://aladhan.com/prayer-times-api), and at the exact
 moment each one arrives, casts the Athan audio file directly to your
-Google Nest speaker.
+Google Nest speaker - snapshotting whatever was playing beforehand and
+restoring it afterward, rather than just leaving the speaker on the Athan
+track. It can also ping a [healthchecks.io](https://healthchecks.io) URL
+daily so you're alerted if it ever stops running.
 
 ### Why a local script, and why not Home Assistant or Google Calendar/Routines?
 
@@ -92,6 +95,11 @@ defaults to `3` (Muslim World League) - you'll set this in Step 2.
      (the Default Media Receiver doesn't support a full-screen custom
      image for audio playback). Must be a public, directly-loadable image
      URL. Leave as `""` to use the device's default.
+   - `HEALTHCHECK_URL` (optional) - a [healthchecks.io](https://healthchecks.io)
+     (or compatible) ping URL. Pinged once a day when the schedule loads
+     successfully, or with `/fail` appended if fetching prayer times fails,
+     so you get alerted if the daemon stops running or can't reach the
+     Aladhan API. Leave as `""` to disable.
    - Make sure this machine's **system timezone** also matches `TIMEZONE`
      (e.g. `sudo timedatectl set-timezone Europe/London`), since the script
      uses the system clock to decide when to fire.
@@ -201,11 +209,5 @@ needed - on either OS.
 3. **Different audio for Fajr** - Aladhan's CDN hosts several adhan
    recordings (`a1.mp3`-`a9.mp3`); pick a different one when
    `prayer_name == "Fajr"`.
-4. **Health/heartbeat monitoring** - ping a free service like
-   healthchecks.io once a day from the script, so you get alerted by email
-   if the daemon ever stops running or fails to fetch prayer times.
-5. **Auto-restore other playback** - snapshot whatever was casting before
-   the Athan and resume it afterward, instead of just setting a fixed
-   volume.
 
 Let me know if you'd like help implementing any of these.

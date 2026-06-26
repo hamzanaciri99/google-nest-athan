@@ -4,8 +4,7 @@ network as your Google Nest speaker (Cast discovery is local-network only).
 
 Each day it fetches that day's prayer times directly from the Aladhan API
 and, at the exact time of each prayer, casts the Athan audio to the
-configured speaker. Independent of the Google Calendar / Apps Script piece
-in apps-script/ - that one is for visibility only, this one does playback.
+configured speaker, restoring whatever was playing beforehand afterward.
 
 Usage:
     python3 athan_player.py            # run continuously
@@ -26,6 +25,8 @@ import config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("athan_player")
+
+DEFAULT_MEDIA_RECEIVER_APP_ID = "CC1AD845"
 
 
 def fetch_timings(for_date: date) -> dict:
@@ -52,7 +53,83 @@ def build_schedule(for_date: date) -> list[tuple[str, datetime]]:
     return sorted(schedule, key=lambda item: item[1])
 
 
-def play_athan(prayer_name: str) -> None:
+def ping_healthcheck(success: bool = True) -> None:
+    url = getattr(config, "HEALTHCHECK_URL", "")
+    if not url:
+        return
+    ping_url = url if success else url.rstrip("/") + "/fail"
+    try:
+        requests.get(ping_url, timeout=10)
+    except requests.RequestException:
+        log.warning("Healthcheck ping to %s failed (network issue), continuing anyway", ping_url)
+
+
+def snapshot_state(cast) -> dict:
+    """Best-effort capture of whatever the speaker was doing before the Athan."""
+    media_controller = cast.media_controller
+    media_controller.update_status()
+    time.sleep(1)  # give the status response a moment to arrive
+    status = media_controller.status
+    return {
+        "volume": cast.status.volume_level if cast.status else None,
+        "app_id": cast.app_id,
+        "content_id": status.content_id,
+        "content_type": status.content_type,
+        "current_time": status.current_time,
+        "player_state": status.player_state,
+    }
+
+
+def wait_until_finished(media_controller, max_wait_seconds: int = 360, poll_interval: int = 3) -> None:
+    time.sleep(5)  # let the stream start before we start checking for IDLE
+    deadline = time.time() + max_wait_seconds
+    while time.time() < deadline:
+        media_controller.update_status()
+        if media_controller.status.player_state in ("IDLE", "UNKNOWN"):
+            return
+        time.sleep(poll_interval)
+    log.warning("Timed out waiting for Athan playback to finish")
+
+
+def restore_state(cast, previous: dict) -> None:
+    """Best-effort restore. Reliable when the previous app was the Default
+    Media Receiver (a plain media URL); for other apps (Spotify, YouTube
+    Music, etc.) we can only relaunch the app - resuming its exact track
+    and position is up to that app, not something we can control."""
+    if previous.get("volume") is not None:
+        cast.set_volume(previous["volume"])
+
+    if previous.get("player_state") not in ("PLAYING", "PAUSED"):
+        return  # nothing meaningful was happening before, leave it idle
+
+    if previous.get("app_id") == DEFAULT_MEDIA_RECEIVER_APP_ID and previous.get("content_id"):
+        try:
+            media_controller = cast.media_controller
+            media_controller.play_media(
+                previous["content_id"],
+                previous["content_type"] or "audio/mp3",
+                current_time=previous["current_time"],
+                autoplay=(previous["player_state"] == "PLAYING"),
+            )
+            media_controller.block_until_active(timeout=10)
+            log.info("Resumed previous media at %.0fs", previous["current_time"] or 0)
+            return
+        except Exception:
+            log.exception("Failed to resume previous media, leaving device as-is")
+            return
+
+    if previous.get("app_id"):
+        try:
+            cast.start_app(previous["app_id"])
+            log.info(
+                "Relaunched previous app %s (exact resume isn't guaranteed for non-default apps)",
+                previous["app_id"],
+            )
+        except Exception:
+            log.exception("Failed to relaunch previous app")
+
+
+def play_athan(prayer_name: str, restore_previous: bool = True) -> None:
     log.info("Playing Athan for %s", prayer_name)
     casts, browser = pychromecast.get_listed_chromecasts(friendly_names=[config.CAST_DEVICE_NAME])
     if not casts:
@@ -61,6 +138,9 @@ def play_athan(prayer_name: str) -> None:
     try:
         cast = casts[0]
         cast.wait(timeout=15)
+
+        previous = snapshot_state(cast) if restore_previous else None
+
         cast.set_volume(config.VOLUME)
         media_controller = cast.media_controller
         media_controller.play_media(
@@ -70,6 +150,10 @@ def play_athan(prayer_name: str) -> None:
             thumb=getattr(config, "BACKGROUND_IMAGE_URL", "") or None,
         )
         media_controller.block_until_active(timeout=10)
+
+        if restore_previous:
+            wait_until_finished(media_controller)
+            restore_state(cast, previous)
     except Exception:
         log.exception("Failed to cast Athan to %s", config.CAST_DEVICE_NAME)
     finally:
@@ -88,8 +172,10 @@ def run_forever() -> None:
                 todays_schedule = build_schedule(now.date())
                 loaded_date = now.date()
                 log.info("Loaded prayer schedule for %s: %s", loaded_date, todays_schedule)
+                ping_healthcheck(success=True)
             except Exception:
                 log.exception("Failed to fetch prayer times, will retry shortly")
+                ping_healthcheck(success=False)
                 time.sleep(60)
                 continue
 
@@ -111,7 +197,7 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.test:
-        play_athan("Test")
+        play_athan("Test", restore_previous=False)
         return
 
     run_forever()
