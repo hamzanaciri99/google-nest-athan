@@ -63,12 +63,17 @@ def play_athan(prayer_name: str) -> None:
         cast.wait(timeout=15)
         cast.set_volume(config.VOLUME)
         media_controller = cast.media_controller
-        media_controller.play_media(config.ADHAN_URL, "audio/mp3")
+        media_controller.play_media(
+            config.ADHAN_URL,
+            "audio/mp3",
+            title=f"{prayer_name} - Athan",
+            thumb=getattr(config, "BACKGROUND_IMAGE_URL", "") or None,
+        )
         media_controller.block_until_active(timeout=10)
     except Exception:
         log.exception("Failed to cast Athan to %s", config.CAST_DEVICE_NAME)
     finally:
-        pychromecast.discovery.stop_discovery(browser)
+        browser.stop_discovery()
 
 
 def run_forever() -> None:

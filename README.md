@@ -150,9 +150,15 @@ The calendar now refreshes itself every night automatically.
    ```
 
    - `CITY`, `COUNTRY`, `METHOD`, `TIMEZONE` - same values as Step 1-3.
-   - `CAST_DEVICE_NAME` - the exact name of your speaker as shown in the
-     Google Home app (Settings > Device name).
+   - `CAST_DEVICE_NAME` - the exact name of your speaker/display as shown
+     in the Google Home app (Settings > Device name).
    - `VOLUME` - 0.0 to 1.0.
+   - `BACKGROUND_IMAGE_URL` (optional) - if your device has a screen (e.g.
+     Nest Hub), this image is shown as the small thumbnail/album-art in the
+     corner of the default "Now Playing" screen while the Athan plays
+     (the Default Media Receiver doesn't support a full-screen custom
+     image for audio playback). Must be a public, directly-loadable image
+     URL. Leave as `""` to use the device's default.
    - Make sure this machine's **system timezone** also matches `TIMEZONE`
      (e.g. `sudo timedatectl set-timezone Europe/London`), since the script
      uses the system clock to decide when to fire.
