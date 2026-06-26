@@ -167,29 +167,68 @@ The calendar now refreshes itself every night automatically.
    Your Nest speaker should immediately play the Athan. If it doesn't, see
    [Troubleshooting](#troubleshooting).
 
-4. Once that works, install it as a persistent service so it survives
-   reboots:
+4. Once that works, install it so it starts automatically at boot and keeps
+   running (restarting itself if it ever crashes). Pick your OS below.
 
-   ```bash
-   # edit WorkingDirectory / ExecStart / User in athan-player.service first
-   sudo cp athan-player.service /etc/systemd/system/
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now athan-player
+### Linux (systemd)
+
+```bash
+# edit WorkingDirectory / ExecStart / User in athan-player.service first
+sudo cp athan-player.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now athan-player
+```
+
+Check it's running and watch the logs:
+
+```bash
+systemctl status athan-player
+journalctl -u athan-player -f
+```
+
+![Terminal logs](docs/img/06-athan-player-logs.png)
+*Screenshot: `journalctl` showing the daily schedule being loaded.*
+
+### Windows (Scheduled Task)
+
+[`install-windows-task.ps1`](local-athan-player/install-windows-task.ps1)
+registers a Scheduled Task that starts the script at boot under the
+SYSTEM account (so no one needs to be logged in) and restarts it
+automatically if it crashes - the Windows equivalent of the systemd unit
+above.
+
+1. Open PowerShell **as Administrator**.
+2. Run:
+
+   ```powershell
+   cd path\to\local-athan-player
+   powershell -ExecutionPolicy Bypass -File .\install-windows-task.ps1
    ```
 
-5. Check it's running and watch the logs:
+3. This creates a task named `AthanPlayer` (visible in Task Scheduler) and
+   starts it immediately. Logs are appended to
+   `local-athan-player\athan_player.log`.
 
-   ```bash
-   systemctl status athan-player
-   journalctl -u athan-player -f
+   Watch the logs live:
+
+   ```powershell
+   Get-Content .\athan_player.log -Wait -Tail 20
    ```
 
    ![Terminal logs](docs/img/06-athan-player-logs.png)
-   *Screenshot: `journalctl` showing the daily schedule being loaded.*
+   *Screenshot: log output showing the daily schedule being loaded.*
+
+To remove it later: `Unregister-ScheduledTask -TaskName "AthanPlayer"`.
+
+> If `python` isn't found, install it from
+> [python.org](https://www.python.org/downloads/) and make sure "Add
+> python.exe to PATH" is checked during install - the Microsoft Store
+> version sometimes only registers an app-execution alias that scheduled
+> tasks running as SYSTEM can't see.
 
 From here, the script independently re-fetches prayer times every day at
 midnight rollover and casts the Athan at each one, with no further action
-needed.
+needed - on either OS.
 
 ---
 
@@ -205,11 +244,22 @@ needed.
 - **`Cast device "..." not found on the local network`** - confirm
   `CAST_DEVICE_NAME` matches the Google Home app exactly; confirm this
   machine is on the same Wi-Fi/VLAN as the speaker (mDNS discovery doesn't
-  cross subnets/VLANs); check no firewall is blocking mDNS (UDP 5353).
+  cross subnets/VLANs); check no firewall is blocking mDNS (UDP 5353) - on
+  Windows, check Windows Defender Firewall isn't blocking the network
+  profile (Private vs Public) this machine is on.
 - **Athan plays at the wrong time** - check this machine's system timezone
-  matches `config.TIMEZONE` (`timedatectl` on Linux).
-- **Service doesn't survive a reboot** - make sure you ran
+  matches `config.TIMEZONE` (`timedatectl` on Linux, or Settings > Time &
+  language on Windows).
+- **Linux: service doesn't survive a reboot** - make sure you ran
   `systemctl enable` (not just `start`) so it's enabled at boot.
+- **Windows: task doesn't survive a reboot, or doesn't restart after a
+  crash** - open Task Scheduler, find `AthanPlayer`, check its History tab
+  for errors, and confirm `athan_player.log` is updating
+  (`Get-Content .\athan_player.log -Tail 20`).
+- **Windows: `athan_player.log` is empty or missing** - the SYSTEM account
+  may not be finding `python` on PATH; confirm `Get-Command python`
+  resolves in an Administrator PowerShell window, then re-run
+  `install-windows-task.ps1`.
 - **Wrong prayer times for your area** - try a different `METHOD` (Step 2).
 
 ---
