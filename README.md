@@ -53,7 +53,8 @@ local-athan-player/
   athan_player.py             - the daemon that casts the Athan at prayer time
   config.example.py           - copy to config.py and fill in your details
   requirements.txt
-  athan-player.service        - systemd unit to run it persistently
+  athan-player.service        - systemd unit to run it persistently (Linux)
+  install-windows-task.ps1    - registers a Scheduled Task to run it persistently (Windows)
 docs/img/                     - screenshot slots referenced below (empty for now)
 ```
 
