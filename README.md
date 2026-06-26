@@ -1,34 +1,25 @@
 # Prayer Times on Google Nest
 
 Plays the Athan (call to prayer) on a Google Nest speaker at each prayer
-time, and keeps a Google Calendar showing the day's prayer times for easy
-reference on your phone/other devices.
+time, fully automatically.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    A[Aladhan API]
-    A -->|daily fetch| B[Google Apps Script]
-    B -->|creates 5 events/day| C["Google Calendar: 'Prayer Times' (visibility only)"]
-    A -->|daily fetch, independent| D[athan_player.py - local script]
-    D -->|Cast protocol, local network| E[Google Nest speaker]
-    E -->|plays| F[Athan mp3]
+    A[Aladhan API] -->|daily fetch| B[athan_player.py - local script]
+    B -->|Cast protocol, local network| C[Google Nest speaker]
+    C -->|plays| D[Athan mp3]
 ```
 
-This is two small, independent pieces sharing the same source of data:
+A small **Python script** runs continuously on a machine on your home
+network (e.g. a Raspberry Pi, NAS, or always-on PC). Each day it fetches
+that day's prayer times (Fajr, Dhuhr, Asr, Maghrib, Isha) from the
+[Aladhan API](https://aladhan.com/prayer-times-api), and at the exact
+moment each one arrives, casts the Athan audio file directly to your
+Google Nest speaker.
 
-1. A **Google Apps Script** runs once a day and writes that day's prayer
-   times (Fajr, Dhuhr, Asr, Maghrib, Isha) as 5 events on a dedicated
-   **Google Calendar**, so you can see them on your phone. This part is
-   purely for visibility - nothing reads this calendar back.
-2. A small **Python script**, running continuously on a machine on your
-   home network (e.g. a Raspberry Pi, NAS, or always-on PC), independently
-   fetches the same day's prayer times each morning and, at the exact
-   moment each one arrives, casts the Athan audio file directly to your
-   Google Nest speaker.
-
-### Why two separate pieces, and why not Home Assistant?
+### Why a local script, and why not Home Assistant or Google Calendar/Routines?
 
 Google's own platform has no way to do this end-to-end: Google Home
 Routines can't be triggered by a calendar event, and even if they could,
@@ -46,95 +37,35 @@ in the cloud.
 ## Repo contents
 
 ```
-apps-script/
-  Code.gs                    - paste into script.google.com; syncs the visibility calendar
-  appsscript.json             - reference project manifest (timezone setting)
 local-athan-player/
   athan_player.py             - the daemon that casts the Athan at prayer time
   config.example.py           - copy to config.py and fill in your details
   requirements.txt
   athan-player.service        - systemd unit to run it persistently (Linux)
   install-windows-task.ps1    - registers a Scheduled Task to run it persistently (Windows)
-docs/img/                     - screenshot slots referenced below (empty for now)
 ```
 
 ## Prerequisites
 
-- A Google account, for the calendar.
+- A Google Nest speaker/display already set up in the Google Home app.
 - A machine that's always on and on the same Wi-Fi/LAN as your Nest
   speaker - a Raspberry Pi is the typical choice, but any always-on Linux
   box (or a PC/NAS) works. Needs Python 3.9+.
-- About 20-30 minutes.
+- About 10 minutes.
 
 ---
 
-## Step 1 - Create the dedicated Google Calendar
-
-1. Go to [calendar.google.com](https://calendar.google.com).
-2. In the left sidebar, next to "Other calendars", click **+** > **Create new calendar**.
-3. Name it exactly `Prayer Times` (this must match `CONFIG.CALENDAR_NAME` in
-   `Code.gs` - if you use a different name, update the script later).
-4. Click **Create calendar**.
-
-![Create calendar](docs/img/01-create-calendar.png)
-*Screenshot: the "Create new calendar" form.*
-
----
-
-## Step 2 - Pick your calculation method
+## Step 1 - Pick your calculation method
 
 Prayer times depend on a calculation method that varies by region/authority
 (e.g. Muslim World League, Egyptian General Authority, Umm al-Qura, ISNA...).
 See the full list at [aladhan.com/calculation-methods](https://aladhan.com/calculation-methods)
 and find the method ID matching your local mosque/authority. This repo
-defaults to `3` (Muslim World League). **Use the same method ID in both
-`apps-script/Code.gs` and `local-athan-player/config.py`** so the calendar
-and the actual playback always agree.
+defaults to `3` (Muslim World League) - you'll set this in Step 2.
 
 ---
 
-## Step 3 - Create the Apps Script project (calendar visibility)
-
-1. Go to [script.google.com](https://script.google.com) > **New project**.
-2. Rename the project (top-left), e.g. "Prayer Times Sync".
-3. Delete the placeholder code and paste in the contents of
-   [`apps-script/Code.gs`](apps-script/Code.gs).
-4. Click the gear icon (**Project Settings**) and set **Time zone** to match
-   `CONFIG.TIMEZONE` in the script exactly (e.g. `Europe/London`).
-5. Edit the `CONFIG` block at the top of the script: `CITY`, `COUNTRY`,
-   `METHOD`, `TIMEZONE`, `CALENDAR_NAME`, and optionally `ALERT_EMAIL`.
-6. Save (Ctrl+S).
-
-![Apps Script editor](docs/img/02-apps-script-editor.png)
-*Screenshot: Code.gs pasted into a new Apps Script project.*
-
-### Test it
-
-1. In the function dropdown, select `testRunToday`, click **Run**.
-2. Authorize the script when prompted (click through **Advanced > Go to
-   "Prayer Times Sync" (unsafe)** - this warning appears because it's your
-   own unpublished script - then **Allow** calendar access).
-
-   ![Authorize](docs/img/03-apps-script-authorize.png)
-
-3. Open Google Calendar - you should see new events (Fajr, Dhuhr, Asr,
-   Maghrib, Isha) for today and tomorrow.
-
-   ![Calendar events](docs/img/05-calendar-events-result.png)
-
-### Schedule the daily trigger
-
-1. Select `setupDailyTrigger` in the function dropdown, click **Run** once.
-2. Open **Triggers** (clock icon, left sidebar) to confirm a daily trigger
-   for `dailySync` exists, running shortly after midnight.
-
-   ![Trigger](docs/img/04-apps-script-trigger.png)
-
-The calendar now refreshes itself every night automatically.
-
----
-
-## Step 4 - Set up the Athan player (actual playback)
+## Step 2 - Set up the Athan player
 
 1. On your always-on machine, get this repo onto it (e.g. `git clone` or
    copy the `local-athan-player/` folder over), then install dependencies:
@@ -150,7 +81,8 @@ The calendar now refreshes itself every night automatically.
    cp config.example.py config.py
    ```
 
-   - `CITY`, `COUNTRY`, `METHOD`, `TIMEZONE` - same values as Step 1-3.
+   - `CITY`, `COUNTRY`, `METHOD`, `TIMEZONE` - your location and the method
+     ID from Step 1.
    - `CAST_DEVICE_NAME` - the exact name of your speaker/display as shown
      in the Google Home app (Settings > Device name).
    - `VOLUME` - 0.0 to 1.0.
@@ -193,9 +125,6 @@ systemctl status athan-player
 journalctl -u athan-player -f
 ```
 
-![Terminal logs](docs/img/06-athan-player-logs.png)
-*Screenshot: `journalctl` showing the daily schedule being loaded.*
-
 ### Windows (Scheduled Task)
 
 [`install-windows-task.ps1`](local-athan-player/install-windows-task.ps1)
@@ -222,9 +151,6 @@ above.
    Get-Content .\athan_player.log -Wait -Tail 20
    ```
 
-   ![Terminal logs](docs/img/06-athan-player-logs.png)
-   *Screenshot: log output showing the daily schedule being loaded.*
-
 To remove it later: `Unregister-ScheduledTask -TaskName "AthanPlayer"`.
 
 > If `python` isn't found, install it from
@@ -241,13 +167,6 @@ needed - on either OS.
 
 ## Troubleshooting
 
-**Apps Script side:**
-- **"Calendar not found"** - `CONFIG.CALENDAR_NAME` must exactly match the
-  calendar's display name (case-sensitive).
-- **Times look shifted by a few hours** - `CONFIG.TIMEZONE` doesn't match
-  the script's Project Settings time zone; they must match exactly.
-
-**Athan player side:**
 - **`Cast device "..." not found on the local network`** - confirm
   `CAST_DEVICE_NAME` matches the Google Home app exactly; confirm this
   machine is on the same Wi-Fi/VLAN as the speaker (mDNS discovery doesn't
@@ -267,32 +186,25 @@ needed - on either OS.
   may not be finding `python` on PATH; confirm `Get-Command python`
   resolves in an Administrator PowerShell window, then re-run
   `install-windows-task.ps1`.
-- **Wrong prayer times for your area** - try a different `METHOD` (Step 2).
+- **Wrong prayer times for your area** - try a different `METHOD` (Step 1).
 
 ---
 
 ## Possible improvements
 
-1. **Single source of truth.** Right now the calendar and the player each
-   call the Aladhan API independently with duplicated config (`CITY`,
-   `COUNTRY`, `METHOD`, `TIMEZONE` in two places). The player could instead
-   read the Google Calendar's private ICS feed URL (Calendar Settings >
-   "Secret address in iCal format") and parse it with the `icalendar`
-   Python package - removing the duplicate API call and any chance of the
-   two drifting out of sync.
-2. **Cache the Athan audio locally** (e.g. serve it via a tiny
+1. **Cache the Athan audio locally** (e.g. serve it via a tiny
    `python -m http.server` on the same machine) instead of streaming from
    `cdn.aladhan.com` every time, so playback doesn't depend on that CDN
    being reachable at the exact prayer time.
-3. **Multi-speaker support** - extend `CAST_DEVICE_NAME` to a list and cast
+2. **Multi-speaker support** - extend `CAST_DEVICE_NAME` to a list and cast
    to all of them (e.g. living room + bedroom).
-4. **Different audio for Fajr** - Aladhan's CDN hosts several adhan
+3. **Different audio for Fajr** - Aladhan's CDN hosts several adhan
    recordings (`a1.mp3`-`a9.mp3`); pick a different one when
    `prayer_name == "Fajr"`.
-5. **Health/heartbeat monitoring** - ping a free service like
+4. **Health/heartbeat monitoring** - ping a free service like
    healthchecks.io once a day from the script, so you get alerted by email
    if the daemon ever stops running or fails to fetch prayer times.
-6. **Auto-restore other playback** - snapshot whatever was casting before
+5. **Auto-restore other playback** - snapshot whatever was casting before
    the Athan and resume it afterward, instead of just setting a fixed
    volume.
 
